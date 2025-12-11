@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Analytics Dashboard - Real-time Monitor</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Login */
+        #loginScreen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            padding: 20px;
+        }
+
+        .login-box {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-box h1 {
+            margin-bottom: 25px;
+            color: #60a5fa;
+            font-size: 22px;
+            text-align: center;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 15px;
+            background: #0f172a;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .login-box input:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+
+        .login-box button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            touch-action: manipulation;
+        }
+
+        .login-box button:active {
+            transform: scale(0.98);
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            background: #334155;
+            color: #94a3b8;
+            border: 2px solid #334155;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            touch-action: manipulation;
+        }
+
+        .mode-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        /* Dashboard */
+        #dashboard {
+            display: none;
+            padding: 10px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #1e293b;
+            border-radius: 12px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            color: #60a5fa;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: #0f172a;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+            animation: pulse 2s infinite;
+            flex-shrink: 0;
+        }
+
+        .status-dot.connected {
+            background: #10b981;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        /* Monitor de pantalla */
+        .screen-monitor {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 15px;
+            min-height: 300px;
+        }
+
+        .screen-monitor h2 {
+            margin-bottom: 12px;
+            font-size: 16px;
+            color: #94a3b8;
+        }
+
+        .screen-container {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        #screenDisplay {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 4px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .screen-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        .no-feed {
+            color: #64748b;
+            text-align: center;
+        }
+
+        /* Panel de control */
+        .control-panel {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section h3 {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-group {
+            margin-bottom: 12px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            background: #0f172a;
+            border: 2px solid #334155;
+            border-radius: 6px;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+            touch-action: manipulation;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .quick-btn {
+            padding: 12px;
+            background: #0f172a;
+            border: 2px solid #334155;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            touch-action: manipulation;
+        }
+
+        .quick-btn:active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            transform: scale(0.95);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .stat-card {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: #0f172a;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: #334155;
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+
+        .switch.active {
+            background: #3b82f6;
+        }
+
+        .switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .switch.active::after {
+            transform: translateX(24px);
+        }
+
+        .mode-badge {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 12px;
+            background: #f59e0b;
+            color: white;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .mode-badge.production {
+            background: #10b981;
+        }
+
+        /* 🔥 RESPONSIVE - TABLET (768px+) */
+        @media (min-width: 768px) {
+            #dashboard {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .main-content {
+                grid-template-columns: 1fr 350px;
+                gap: 20px;
+            }
+
+            .screen-monitor {
+                padding: 20px;
+                min-height: 500px;
+            }
+
+            .screen-monitor h2 {
+                font-size: 18px;
+            }
+
+            .screen-container {
+                min-height: 450px;
+            }
+
+            #screenDisplay {
+                max-height: 700px;
+            }
+
+            .control-panel {
+                padding: 20px;
+            }
+
+            .login-box {
+                padding: 40px;
+            }
+
+            .login-box h1 {
+                font-size: 24px;
+            }
+        }
+
+        /* 🔥 MODO HORIZONTAL MÓVIL (landscape) */
+        @media (max-width: 767px) and (orientation: landscape) {
+            #dashboard {
+                padding: 8px;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            .header {
+                padding: 8px 12px;
+                margin-bottom: 8px;
+            }
+
+            .header h1 {
+                font-size: 14px;
+            }
+
+            .status-indicator {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+
+            .main-content {
+                grid-template-columns: 1fr 280px;
+                gap: 10px;
+                height: calc(100vh - 70px);
+            }
+
+            .screen-monitor {
+                padding: 10px;
+                min-height: auto;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .screen-monitor h2 {
+                font-size: 13px;
+                margin-bottom: 8px;
+            }
+
+            .screen-container {
+                min-height: auto;
+                flex: 1;
+                padding: 5px;
+            }
+
+            #screenDisplay {
+                max-height: 100%;
+                width: 100%;
+                object-fit: contain;
+            }
+
+            .screen-info {
+                top: 5px;
+                right: 5px;
+                padding: 4px 8px;
+                font-size: 9px;
+            }
+
+            .control-panel {
+                padding: 10px;
+                height: 100%;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .control-section {
+                margin-bottom: 12px;
+            }
+
+            .control-section h3 {
+                font-size: 11px;
+                margin-bottom: 6px;
+            }
+
+            .stats {
+                gap: 6px;
+            }
+
+            .stat-card {
+                padding: 8px;
+            }
+
+            .stat-value {
+                font-size: 18px;
+            }
+
+            .stat-label {
+                font-size: 9px;
+            }
+
+            .input-group input {
+                padding: 8px;
+                font-size: 16px;
+            }
+
+            .btn {
+                padding: 8px;
+                font-size: 12px;
+                margin-bottom: 6px;
+            }
+
+            .quick-actions {
+                gap: 6px;
+                margin-top: 8px;
+            }
+
+            .quick-btn {
+                padding: 8px;
+                font-size: 14px;
+            }
+
+            .toggle-switch {
+                padding: 8px;
+                font-size: 12px;
+            }
+
+            .switch {
+                width: 40px;
+                height: 22px;
+            }
+
+            .switch::after {
+                width: 16px;
+                height: 16px;
+            }
+
+            .switch.active::after {
+                transform: translateX(18px);
+            }
+
+            .mode-badge {
+                top: 5px;
+                right: 5px;
+                padding: 3px 8px;
+                font-size: 9px;
+            }
+        }
+
+        /* 🔥 MÓVILES PEQUEÑOS (max 360px) */
+        @media (max-width: 360px) {
+            .header h1 {
+                font-size: 16px;
+            }
+
+            .quick-actions {
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .quick-btn {
+                padding: 10px;
+                font-size: 14px;
+            }
+        }
+
+        /* 🔥 DESKTOP GRANDE (1400px+) */
+        @media (min-width: 1400px) {
+            .main-content {
+                grid-template-columns: 1fr 400px;
+            }
+
+            .header h1 {
+                font-size: 26px;
+            }
+        }
+
+        /* Ocultar scrollbar pero mantener funcionalidad */
+        .control-panel::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .control-panel::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        .control-panel::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Pantalla de Login -->
+    <div id="loginScreen">
+        <div class="login-box">
+            <h1>🔐 Analytics Access</h1>
+            
+            <div class="mode-selector">
+                <button class="mode-btn active" onclick="selectMode('local')">
+                    🏠 Local
+                </button>
+                <button class="mode-btn" onclick="selectMode('production')">
+                    ☁️ Producción
+                </button>
+            </div>
+            
+            <input type="password" id="passwordInput" placeholder="Enter access code" autocomplete="off">
+            <button onclick="login()">Access Dashboard</button>
+        </div>
+    </div>
+
+    <!-- Dashboard Principal -->
+    <div id="dashboard">
+        <div class="mode-badge" id="modeBadge">LOCAL</div>
+        
+        <div class="header">
+            <h1>📊 Real-time Analytics</h1>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Monitor de pantalla -->
+            <div class="screen-monitor">
+                <h2>Live Monitor Feed</h2>
+                <div class="screen-container">
+                    <div class="no-feed" id="noFeed">
+                        <p style="font-size: 36px; margin-bottom: 8px;">📡</p>
+                        <p style="font-size: 14px;">Waiting for data stream...</p>
+                    </div>
+                    <img id="screenDisplay" style="display: none;">
+                    <div class="screen-info" id="screenInfo" style="display: none;">
+                        Last update: <span id="lastUpdate">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de control -->
+            <div class="control-panel">
+                <div class="control-section">
+                    <h3>System Status</h3>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="clientCount">0</div>
+                            <div class="stat-label">Active Clients</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="latency">--</div>
+                            <div class="stat-label">Latency (ms)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Overlay Control</h3>
+                    <div class="toggle-switch">
+                        <span>Show Indicator</span>
+                        <div class="switch active" id="overlayToggle" onclick="toggleOverlay()"></div>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="overlayText" placeholder="●" maxlength="3">
+                    </div>
+                    <button class="btn btn-primary" onclick="sendUpdate()">
+                        📤 Update Indicator
+                    </button>
+                </div>
+
+                <div class="control-section">
+                    <h3>Quick Actions</h3>
+                    <div class="quick-actions">
+                        <button class="quick-btn" onclick="sendQuick('0')">0</button>
+                        <button class="quick-btn" onclick="sendQuick('1')">1</button>
+                        <button class="quick-btn" onclick="sendQuick('2')">2</button>
+                        <button class="quick-btn" onclick="sendQuick('3')">3</button>
+                        <button class="quick-btn" onclick="sendQuick('A')">A</button>
+                        <button class="quick-btn" onclick="sendQuick('B')">B</button>
+                        <button class="quick-btn" onclick="sendQuick('●')">●</button>
+                        <button class="quick-btn" onclick="sendQuick('✓')">✓</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Server Controls</h3>
+                    <button class="btn btn-warning" onclick="wakeUpServer()">
+                        ⚡ Wake Server
+                    </button>
+                    <button class="btn btn-secondary" onclick="requestScreenshot()">
+                        📸 Request Capture
+                    </button>
+                    <button class="btn btn-danger" onclick="logout()">
+                        🚪 Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKENDS = {
+            local: 'http://localhost:8080',
+            production: 'https://tu-app.onrender.com'
+        };
+        
+        let currentMode = 'local';
+        let BACKEND_URL = BACKENDS.local;
+        const PASSWORD = 'admin123';
+        
+        let socket = null;
+        let isLoggedIn = false;
+        let overlayVisible = true;
+        let lastScreenTime = 0;
+
+        function selectMode(mode) {
+            currentMode = mode;
+            BACKEND_URL = BACKENDS[mode];
+            
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            console.log(`Modo seleccionado: ${mode} (${BACKEND_URL})`);
+        }
+
+        function login() {
+            const password = document.getElementById('passwordInput').value;
+            if (password === PASSWORD) {
+                isLoggedIn = true;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                
+                const badge = document.getElementById('modeBadge');
+                badge.textContent = currentMode === 'local' ? '🏠 LOCAL' : '☁️ PROD';
+                badge.className = currentMode === 'production' ? 'mode-badge production' : 'mode-badge';
+                
+                initDashboard();
+            } else {
+                alert('❌ Invalid access code');
+            }
+        }
+
+        function logout() {
+            isLoggedIn = false;
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('dashboard').style.display = 'none';
+            if (socket) socket.disconnect();
+        }
+
+        function initDashboard() {
+            connectWebSocket();
+            checkServerStatus();
+            setInterval(checkServerStatus, 30000);
+        }
+
+        function connectWebSocket() {
+            socket = io(BACKEND_URL, {
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                console.log(`✓ WebSocket conectado a ${BACKEND_URL}`);
+                socket.emit('client_type', { type: 'web' });
+                updateStatus(true, `Connected (${currentMode})`);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('✗ WebSocket desconectado');
+                updateStatus(false, 'Disconnected');
+            });
+
+            socket.on('screen_update', (data) => {
+                displayScreenshot(data);
+            });
+
+            socket.on('status_update', (data) => {
+                document.getElementById('clientCount').textContent = data.windowsConnected || 0;
+                if (data.latestScreenshot) {
+                    displayScreenshot(data.latestScreenshot);
+                }
+            });
+        }
+
+        function displayScreenshot(data) {
+            const img = document.getElementById('screenDisplay');
+            const noFeed = document.getElementById('noFeed');
+            const screenInfo = document.getElementById('screenInfo');
+            
+            img.src = 'data:image/jpeg;base64,' + data.image;
+            img.style.display = 'block';
+            noFeed.style.display = 'none';
+            screenInfo.style.display = 'block';
+            
+            const now = Date.now();
+            const latency = now - (data.timestamp * 1000);
+            document.getElementById('latency').textContent = Math.round(latency);
+            
+            const time = new Date().toLocaleTimeString();
+            document.getElementById('lastUpdate').textContent = time;
+            
+            lastScreenTime = now;
+        }
+
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/ping`);
+                const data = await response.json();
+                
+                if (!socket || !socket.connected) {
+                    updateStatus(true, `Server Online (${data.windowsClients} clients)`);
+                }
+            } catch (error) {
+                if (!socket || !socket.connected) {
+                    updateStatus(false, 'Server Offline');
+                }
+            }
+        }
+
+        function updateStatus(online, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            dot.className = online ? 'status-dot connected' : 'status-dot';
+            statusText.textContent = text;
+        }
+
+        async function sendUpdate() {
+            const text = document.getElementById('overlayText').value || '●';
+            try {
+                const response = await fetch(`${BACKEND_URL}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                const data = await response.json();
+                console.log('✓ Sent:', text);
+            } catch (error) {
+                alert('❌ Error sending update');
+            }
+        }
+
+        function sendQuick(value) {
+            document.getElementById('overlayText').value = value;
+            sendUpdate();
+        }
+
+        async function toggleOverlay() {
+            overlayVisible = !overlayVisible;
+            const toggle = document.getElementById('overlayToggle');
+            toggle.classList.toggle('active');
+            
+            try {
+                await fetch(`${BACKEND_URL}/toggle-overlay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ visible: overlayVisible })
+                });
+            } catch (error) {
+                console.error('Error toggling overlay');
+            }
+        }
+
+        function requestScreenshot() {
+            if (socket && socket.connected) {
+                socket.emit('request_screenshot', {});
+            }
+        }
+
+        async function wakeUpServer() {
+            updateStatus(false, 'Waking up server...');
+            try {
+                await fetch(`${BACKEND_URL}/ping`);
+                setTimeout(checkServerStatus, 2000);
+            } catch (error) {
+                updateStatus(false, 'Failed to wake server');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('passwordInput')?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') login();
+            });
+            
+            document.getElementById('overlayText')?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendUpdate();
+            });
+        });
+    </script>
+</body>
+</html>
